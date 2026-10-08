@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>WAYFARE.ONLINE</title>
+    <meta name="description" content="WAYFARE.ONLINE - a lightweight browser MMORPG. Explore Elaris, Greenreach and the Hollow." />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas" touch-action="none"></canvas>
+
+    <!-- ============================ START SCREEN ============================ -->
+    <div id="screen-start" class="screen">
+      <div class="panel start-panel">
+        <h1 class="logo">WAYFARE<span>.ONLINE</span></h1>
+        <p class="tagline">A world in the veil. Wander, fight, trade, and leave your mark.</p>
+
+        <div class="field">
+          <label for="in-account">Account</label>
+          <input id="in-account" type="text" autocomplete="username" maxlength="24" placeholder="your account name" />
+        </div>
+        <div class="field">
+          <label for="in-password">Password</label>
+          <input id="in-password" type="password" autocomplete="current-password" maxlength="64" placeholder="password" />
+        </div>
+
+        <div class="row">
+          <button id="btn-login" class="btn primary">Log In</button>
+          <button id="btn-register" class="btn">Register</button>
+        </div>
+
+        <details id="register-extra" class="register-extra">
+          <summary>New wayfarer options</summary>
+          <div class="field">
+            <label for="in-charname">Character name</label>
+            <input id="in-charname" type="text" maxlength="16" placeholder="e.g. Aldric" />
+          </div>
+          <div class="field">
+            <label>Archetype</label>
+            <div id="archetype-picker" class="archetype-picker"></div>
+          </div>
+        </details>
+
+        <div class="row wrap">
+          <button id="btn-offline" class="btn ghost">Play Offline (single player)</button>
+        </div>
+        <label class="server-row">
+          Server
+          <input id="in-server" type="text" value="" placeholder="auto (this host)" />
+        </label>
+        <div id="start-error" class="error"></div>
+        <p class="hint" id="start-hint"></p>
+      </div>
+    </div>
+
+    <!-- ============================ CHARACTER SELECT ============================ -->
+    <div id="screen-characters" class="screen hidden">
+      <div class="panel">
+        <h2>Choose your wayfarer</h2>
+        <div id="character-list" class="character-list"></div>
+        <div class="row">
+          <button id="btn-enter" class="btn primary" disabled>Enter World</button>
+          <button id="btn-logout" class="btn ghost">Log Out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================ IN-GAME HUD ============================ -->
+    <div id="hud" class="hidden">
+      <div id="crosshair"></div>
+
+      <!-- Top-left: player vitals -->
+      <div id="vitals" class="hud-block">
+        <div class="vital-name" id="v-name">Wayfarer</div>
+        <div class="vital-sub" id="v-sub">Level 1 Wayfarer</div>
+        <div class="bar hp"><div class="fill" id="bar-hp"></div><span id="txt-hp">100/100</span></div>
+        <div class="bar mp"><div class="fill" id="bar-mp"></div><span id="txt-mp">60/60</span></div>
+        <div class="bar sp"><div class="fill" id="bar-sp"></div><span id="txt-sp">100/100</span></div>
+        <div class="bar xp"><div class="fill" id="bar-xp"></div><span id="txt-xp">0/120</span></div>
+        <div class="bar momentum"><div class="fill" id="bar-mom"></div><span id="txt-mom">Momentum 0</span></div>
+      </div>
+
+      <!-- Top-right: minimap + zone -->
+      <div id="topright" class="hud-block">
+        <div id="zone-name" class="zone-name">Elaris</div>
+        <canvas id="minimap" width="160" height="160"></canvas>
+        <div id="server-status" class="server-status">offline</div>
+      </div>
+
+      <!-- Bottom-center: action bar -->
+      <div id="actionbar" class="hud-block"></div>
+
+      <!-- Bottom-left: chat -->
+      <div id="chat-wrap" class="hud-block">
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" maxlength="200" placeholder="Press Enter to chat..." />
+        </div>
+      </div>
+
+      <!-- Right: quest tracker -->
+      <div id="quest-tracker" class="hud-block"></div>
+
+      <!-- Target frame -->
+      <div id="target-frame" class="hud-block hidden">
+        <div class="target-name" id="target-name">Target</div>
+        <div class="bar hp small"><div class="fill" id="bar-target-hp"></div></div>
+      </div>
+
+      <!-- Interaction prompt -->
+      <div id="interact-prompt" class="interact-prompt hidden"></div>
+
+      <!-- Floating combat text layer -->
+      <div id="floaters" class="floaters"></div>
+
+      <!-- Event toasts -->
+      <div id="toasts" class="toasts"></div>
+
+      <!-- Death overlay -->
+      <div id="death-overlay" class="death-overlay hidden">
+        <div class="panel center">
+          <h2>You have fallen</h2>
+          <p id="death-xp"></p>
+          <button id="btn-respawn" class="btn primary">Respawn</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================ SIDE PANELS ============================ -->
+    <div id="panel-inventory" class="side-panel hidden">
+      <div class="side-head"><span>Inventory &amp; Equipment</span><button class="x" data-close="panel-inventory">×</button></div>
+      <div class="equip-row" id="equipment"></div>
+      <div class="gold-row">Gold: <b id="inv-gold">0</b></div>
+      <div class="inv-grid" id="inventory"></div>
+    </div>
+
+    <div id="panel-skills" class="side-panel hidden">
+      <div class="side-head"><span>Skills &amp; Abilities</span><button class="x" data-close="panel-skills">×</button></div>
+      <div id="skill-list" class="skill-list"></div>
+      <div id="ability-list" class="ability-list"></div>
+    </div>
+
+    <div id="panel-quests" class="side-panel hidden">
+      <div class="side-head"><span>Quests</span><button class="x" data-close="panel-quests">×</button></div>
+      <div id="quest-list" class="quest-list"></div>
+    </div>
+
+    <div id="panel-crafting" class="side-panel hidden">
+      <div class="side-head"><span>Crafting</span><button class="x" data-close="panel-crafting">×</button></div>
+      <div id="recipe-list" class="recipe-list"></div>
+    </div>
+
+    <div id="panel-settings" class="side-panel hidden">
+      <div class="side-head"><span>Settings</span><button class="x" data-close="panel-settings">×</button></div>
+      <div class="settings">
+        <label>Graphics quality
+          <select id="set-quality">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label>Draw distance <input id="set-distance" type="range" min="45" max="110" step="5" value="70" /></label>
+        <label>Audio volume <input id="set-volume" type="range" min="0" max="100" value="60" /></label>
+        <label class="check"><input id="set-invert" type="checkbox" /> Invert camera Y</label>
+        <label class="check"><input id="set-shake" type="checkbox" checked /> Camera shake</label>
+      </div>
+    </div>
+
+    <div id="dialogue" class="dialogue hidden">
+      <div class="panel">
+        <div class="dialogue-npc" id="dlg-npc">Name</div>
+        <p class="dialogue-text" id="dlg-text"></p>
+        <div id="dlg-options" class="dialogue-options"></div>
+      </div>
+    </div>
+
+    <div id="loading" class="loading hidden"><div class="spinner"></div><span id="loading-text">Loading...</span></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

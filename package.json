@@ -1,0 +1,26 @@
+{
+  "name": "wayfare-online",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WAYFARE.ONLINE - lightweight browser MMORPG",
+  "scripts": {
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "tsx server/src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx server/test/sim.ts && tsx server/test/bots.ts"
+  },
+  "dependencies": {
+    "babylonjs": "^7.44.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}
