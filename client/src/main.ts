@@ -359,6 +359,7 @@ function wireInput() {
   // settings
   $<HTMLSelectElement>('set-quality').addEventListener('change', (e) => game?.setQuality((e.target as HTMLSelectElement).value as 'low' | 'medium' | 'high'));
   $<HTMLInputElement>('set-distance').addEventListener('input', (e) => game?.setDrawDistance(Number((e.target as HTMLInputElement).value)));
+  $<HTMLInputElement>('set-pixel').addEventListener('input', (e) => game?.setPixelSize(Number((e.target as HTMLInputElement).value)));
   $<HTMLInputElement>('set-volume').addEventListener('input', (e) => audio.setVolume(Number((e.target as HTMLInputElement).value) / 100));
   $<HTMLInputElement>('set-invert').addEventListener('change', (e) => game?.setInvertY((e.target as HTMLInputElement).checked));
   $<HTMLInputElement>('set-shake').addEventListener('change', (e) => game?.setShake((e.target as HTMLInputElement).checked));

@@ -65,6 +65,8 @@ rendering, input, and a transport.
 | --- | --- |
 | `client/src/main.ts` | Bootstrap, screens, message dispatch, input wiring |
 | `client/src/game.ts` | Babylon.js `GameView`: scene, meshes, camera, input, interpolation |
+| `client/src/textures.ts` | `TextureLibrary`: procedural pixel-art textures (nearest, no mipmaps) |
+| `client/src/terrain.ts` | Render-side height field (`terrainHeight`) and slope sampling |
 | `client/src/ui.ts` | HUD, side panels, dialogue, floaters, toasts, minimap |
 | `client/src/transport.ts` | `Transport` interface, entity-id helpers, default URL |
 | `client/src/net.ts` | `OnlineTransport` (WebSocket) |

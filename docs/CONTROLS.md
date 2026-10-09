@@ -48,6 +48,6 @@
 
 ## Settings
 
-The settings panel controls graphics quality, draw distance, audio volume, camera
-Y inversion, and camera shake. These affect rendering and audio only; gameplay is
-identical online and offline.
+The settings panel controls graphics quality, draw distance, pixel size, audio
+volume, camera Y inversion, and camera shake. These affect rendering and audio
+only; gameplay is identical online and offline.

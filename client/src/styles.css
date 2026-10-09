@@ -20,7 +20,7 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
 body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; font-size: 14px; }
 
-#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
 
 .hidden { display: none !important; }
 

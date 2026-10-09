@@ -15,7 +15,11 @@ backend via **Play Offline**.
 - Six archetypes, twelve abilities each shaped by role, momentum/dodge combat.
 - AI finite-state machines: idle, patrol, detect, chase, attack, hurt, flee, dead, return.
 - Gathering, crafting, quests, factions, loot tables, boss encounter.
-- Lightweight: no external assets, procedural Web Audio, low draw distance options.
+- Retro pixel-art 3D look: low-poly geometry, procedurally generated pixel
+  textures, low-resolution nearest-neighbour pixel pipeline with adjustable pixel
+  size. See [`docs/RENDERING.md`](docs/RENDERING.md).
+- Lightweight: no external assets, procedural Web Audio, quality presets and low
+  draw distance options.
 
 ## Requirements
 
@@ -69,8 +73,8 @@ shared/src/     Content data + the authoritative Simulation (server and client)
   content/      items, abilities, enemies, recipes, quests, npcs, zones
   sim/          collision, pathfinding, stats, loot, combat, world, simulation
 server/src/     HTTP + WebSocket server, sessions, persistence
-client/src/     Babylon.js renderer, UI, transports (online + offline)
-docs/           Architecture, systems, world, networking, database, roadmap
+client/src/     Babylon.js renderer, pixel textures, terrain, UI, transports
+docs/           Architecture, systems, world, networking, rendering, roadmap
 ```
 
 ## Deployment (GitHub Pages)
