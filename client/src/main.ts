@@ -8,6 +8,7 @@ import { Hud } from './ui.js';
 import { OnlineTransport } from './net.js';
 import { OfflineTransport } from './offline.js';
 import { audio } from './audio.js';
+import { applyUiTokens } from './visual.js';
 import { defaultServerUrl, type NetStatus, type Transport } from './transport.js';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -372,6 +373,7 @@ function wireInput() {
 }
 
 function boot() {
+  applyUiTokens();
   buildArchetypePicker();
   const acct = localStorage.getItem('wf_account');
   if (acct) $<HTMLInputElement>('in-account').value = acct;

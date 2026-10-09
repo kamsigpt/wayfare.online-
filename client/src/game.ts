@@ -27,6 +27,8 @@ import type { ClientMessage, EnemySnapshot, PlayerSnapshot, ServerMessage, Snaps
 import type { ArchetypeId, EnemyDef } from '@shared/types.js';
 import { TextureLibrary } from './textures.js';
 import { terrainHeight, terrainSlope } from './terrain.js';
+import { QUALITY_PRESETS, SKY, type Quality } from './visual.js';
+import { Kit, makeEnemy, makeNpc, makePlayer, type BuiltModel } from './models.js';
 
 type EnemyArchetype = EnemyDef['archetype'];
 
@@ -36,6 +38,12 @@ interface Limbs {
   armL?: TransformNode;
   legR?: TransformNode;
   legL?: TransformNode;
+  tail?: TransformNode;
+  wingL?: TransformNode;
+  wingR?: TransformNode;
+  cape?: TransformNode;
+  bodyBaseY?: number;
+  floating?: boolean;
 }
 
 interface EntityView {
@@ -43,6 +51,7 @@ interface EntityView {
   meshes: AbstractMesh[];
   mats: StandardMaterial[];
   limbs: Limbs;
+  primary?: StandardMaterial;
   kind: string;
   tx: number;
   tz: number;
@@ -65,24 +74,7 @@ export interface GameCallbacks {
   onAbilitySlot?: (slot: number) => void;
 }
 
-type Quality = 'low' | 'medium' | 'high';
-
-interface QualityConfig {
-  foliage: number;
-  clouds: number;
-  treeScale: number;
-  maxZ: number;
-  fogMul: number;
-  pixel: number;
-}
-
-const QUALITY: Record<Quality, QualityConfig> = {
-  low: { foliage: 120, clouds: 8, treeScale: 0.55, maxZ: 240, fogMul: 1.6, pixel: 4 },
-  medium: { foliage: 420, clouds: 15, treeScale: 1, maxZ: 430, fogMul: 1.0, pixel: 3 },
-  high: { foliage: 900, clouds: 24, treeScale: 1, maxZ: 640, fogMul: 0.75, pixel: 2 },
-};
-
-const SKY_FOLLOW_RADIUS = 900;
+type QualityConfig = (typeof QUALITY_PRESETS)[Quality];
 
 export class GameView {
   readonly engine: Engine;
@@ -148,7 +140,7 @@ export class GameView {
     this.camera.panningSensibility = 0;
     this.camera.inertia = 0.55;
     this.camera.minZ = 0.15;
-    this.camera.maxZ = QUALITY.medium.maxZ;
+    this.camera.maxZ = QUALITY_PRESETS.medium.maxZ;
     this.camera.fov = 0.9;
 
     this.zone = ZONES.elaris;
@@ -193,7 +185,7 @@ export class GameView {
     this.waterMeshes = [];
     if (this.selfRoot) { this.selfRoot.dispose(); this.selfRoot = null; this.selfLimbs = {}; }
 
-    const cfg = QUALITY[this.quality];
+    const cfg = QUALITY_PRESETS[this.quality];
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogColor = Color3.FromHexString(zone.fogColor);
     this.scene.fogDensity = zone.fogDensity * cfg.fogMul;
@@ -253,7 +245,7 @@ export class GameView {
   // ------------------------------------------------------------------ sky
 
   private buildSky(zone: ZoneDef) {
-    const sky = MeshBuilder.CreateSphere('sky', { diameter: SKY_FOLLOW_RADIUS, segments: 16, sideOrientation: Mesh.BACKSIDE }, this.scene);
+    const sky = MeshBuilder.CreateSphere('sky', { diameter: SKY.followRadius, segments: 16, sideOrientation: Mesh.BACKSIDE }, this.scene);
     sky.infiniteDistance = true;
     sky.isPickable = false;
     const mat = new StandardMaterial('skymat', this.scene);
@@ -751,13 +743,14 @@ export class GameView {
       return;
     }
     if (!this.selfRoot) {
-      const built = this.makeHumanoid(`self`, {
-        bodyColor: you.appearance.bodyColor,
-        hairColor: you.appearance.hairColor,
+      const kit = new Kit(this.scene, this.texlib, 'self');
+      makePlayer(kit, {
         skin: you.appearance.skinTone ?? '#e0ac69',
-        weapon: weaponFor(you.archetype),
-        scale: 1,
+        hair: you.appearance.hairColor,
+        bodyColor: you.appearance.bodyColor,
+        archetype: you.archetype,
       });
+      const built = this.finishModel(kit, 0.9);
       this.selfRoot = built.root;
       this.selfLimbs = built.limbs;
     }
@@ -780,23 +773,31 @@ export class GameView {
     }
   }
 
-  private baseView(root: TransformNode, meshes: AbstractMesh[], mats: StandardMaterial[], limbs: Limbs, kind: string, e: SnapshotEntity, color: Color3): EntityView {
+  private baseView(root: TransformNode, meshes: AbstractMesh[], mats: StandardMaterial[], limbs: Limbs, kind: string, e: SnapshotEntity, color: Color3, primary?: StandardMaterial): EntityView {
     for (const m of meshes) {
       m.metadata = { entityId: e.id, kind: e.kind };
     }
-    return { root, meshes, mats, limbs, kind, tx: e.x, tz: e.z, th: e.h, baseColor: color, moving: false, anim: 'idle', phase: Math.random() * 10, floating: kind === 'node', label: undefined, defId: undefined };
+    return { root, meshes, mats, limbs, primary, kind, tx: e.x, tz: e.z, th: e.h, baseColor: color, moving: false, anim: 'idle', phase: Math.random() * 10, floating: kind === 'node' || Boolean(limbs.floating), label: undefined, defId: undefined };
+  }
+
+  private finishModel(kit: Kit, shadowRadius = 0.9): BuiltModel {
+    const built = kit.result();
+    const shadow = this.makeBlobShadow(`${built.root.name}_shadow`, shadowRadius);
+    shadow.parent = built.root;
+    built.meshes.push(shadow);
+    return built;
   }
 
   private buildPlayer(e: PlayerSnapshot): EntityView {
-    const built = this.makeHumanoid(`p_${e.id}`, {
-      bodyColor: e.colors?.bodyColor ?? '#90a4ae',
-      hairColor: e.colors?.hairColor ?? '#3e2723',
+    const kit = new Kit(this.scene, this.texlib, `p_${e.id}`);
+    makePlayer(kit, {
       skin: e.colors?.skinTone ?? '#e0ac69',
-      weapon: weaponFor(e.archetype),
-      scale: 1,
+      hair: e.colors?.hairColor ?? '#3e2723',
+      bodyColor: e.colors?.bodyColor ?? '#90a4ae',
+      archetype: e.archetype,
     });
-    const view = this.baseView(built.root, built.meshes, built.mats, built.limbs, 'player', e, Color3.FromHexString(e.colors?.bodyColor ?? '#90a4ae'));
-    return view;
+    const built = this.finishModel(kit, 0.9);
+    return this.baseView(built.root, built.meshes, built.mats, built.limbs, 'player', e, Color3.FromHexString(e.colors?.bodyColor ?? '#90a4ae'), built.primary);
   }
 
   private buildEnemy(e: EnemySnapshot): EntityView {
@@ -804,21 +805,10 @@ export class GameView {
     const color = Color3.FromHexString(def?.color ?? '#8d6e63');
     const scale = def?.scale ?? 1;
     const arche: EnemyArchetype = (def?.archetype ?? 'brute') as EnemyArchetype;
-    const name = `e_${e.id}`;
-    let built: { root: TransformNode; meshes: AbstractMesh[]; mats: StandardMaterial[]; limbs: Limbs } = {
-      root: new TransformNode(name, this.scene), meshes: [], mats: [], limbs: {},
-    };
-
-    if (e.defId.includes('wisp')) {
-      built = this.buildWisp(name, def?.color ?? '#7e57c2', scale);
-    } else if (arche === 'hunter') {
-      built = this.buildBeast(name, def?.color ?? '#8d6e63', scale);
-    } else if (e.defId.includes('golem')) {
-      built = this.buildGolem(name, def?.color ?? '#78909c', scale);
-    } else {
-      built = this.makeHumanoid(name, { bodyColor: def?.color ?? '#8d6e63', hairColor: '#2b2b2b', skin: '#c98f5a', weapon: arche === 'brute' || arche === 'guardian' ? 'claw' : arche === 'caster' ? 'staff' : 'sword', scale: 1.05 * scale });
-    }
-    const view = this.baseView(built.root, built.meshes, built.mats, built.limbs, 'enemy', e, color);
+    const kit = new Kit(this.scene, this.texlib, `e_${e.id}`);
+    makeEnemy(kit, e.defId, arche, def?.color ?? '#8d6e63', scale);
+    const built = this.finishModel(kit, 0.9 * scale);
+    const view = this.baseView(built.root, built.meshes, built.mats, built.limbs, 'enemy', e, color, built.primary);
     view.defId = e.defId;
     view.label = e.name;
     if (def?.boss) { view.root.scaling.setAll(1.25); }
@@ -826,80 +816,13 @@ export class GameView {
     return view;
   }
 
-  private buildBeast(name: string, color: string, scale: number): { root: TransformNode; meshes: AbstractMesh[]; mats: StandardMaterial[]; limbs: Limbs } {
-    const root = new TransformNode(name, this.scene);
-    const meshes: AbstractMesh[] = [];
-    const mats: StandardMaterial[] = [];
-    const mat = this.entityMat(`${name}_body`, color);
-    mats.push(mat);
-    const body = MeshBuilder.CreateBox(`${name}_b`, { width: 1.0 * scale, height: 0.8 * scale, depth: 1.7 * scale }, this.scene);
-    body.position.y = 0.75 * scale;
-    body.parent = root;
-    body.material = mat;
-    meshes.push(body);
-    const head = MeshBuilder.CreateBox(`${name}_h`, { width: 0.7 * scale, height: 0.6 * scale, depth: 0.7 * scale }, this.scene);
-    head.position.set(0, 0.9 * scale, 1.05 * scale);
-    head.parent = root;
-    head.material = mat;
-    meshes.push(head);
-    const legMat = this.entityMat(`${name}_leg`, '#4e342e');
-    mats.push(legMat);
-    const limbs: Limbs = {};
-    for (const [lx, lz] of [[-0.35, -0.6], [0.35, -0.6], [-0.35, 0.6], [0.35, 0.6]] as [number, number][]) {
-      const leg = MeshBuilder.CreateBox(`${name}_l${lx}_${lz}`, { width: 0.2 * scale, height: 0.6 * scale, depth: 0.2 * scale }, this.scene);
-      leg.position.set(lx * scale, 0.3 * scale, lz * scale);
-      leg.parent = root;
-      leg.material = legMat;
-      meshes.push(leg);
-    }
-    return { root, meshes, mats, limbs };
-  }
-
-  private buildWisp(name: string, color: string, scale: number): { root: TransformNode; meshes: AbstractMesh[]; mats: StandardMaterial[]; limbs: Limbs } {
-    const root = new TransformNode(name, this.scene);
-    const meshes: AbstractMesh[] = [];
-    const mats: StandardMaterial[] = [];
-    const mat = this.entityMat(`${name}_m`, color, 0.6);
-    mat.emissiveColor = Color3.FromHexString(color).scale(0.7);
-    mats.push(mat);
-    const orb = MeshBuilder.CreateSphere(`${name}_orb`, { diameter: 1.3 * scale, segments: 6 }, this.scene);
-    orb.position.y = 1.2 * scale;
-    orb.parent = root;
-    orb.material = mat;
-    meshes.push(orb);
-    return { root, meshes, mats, limbs: {}, };
-  }
-
-  private buildGolem(name: string, color: string, scale: number): { root: TransformNode; meshes: AbstractMesh[]; mats: StandardMaterial[]; limbs: Limbs } {
-    const root = new TransformNode(name, this.scene);
-    const meshes: AbstractMesh[] = [];
-    const mats: StandardMaterial[] = [];
-    const mat = this.entityMat(`${name}_m`, color);
-    mats.push(mat);
-    const torso = MeshBuilder.CreateBox(`${name}_t`, { width: 1.3 * scale, height: 1.3 * scale, depth: 0.9 * scale }, this.scene);
-    torso.position.y = 1.15 * scale;
-    torso.parent = root; torso.material = mat; meshes.push(torso);
-    const head = MeshBuilder.CreateBox(`${name}_h`, { width: 0.6 * scale, height: 0.6 * scale, depth: 0.6 * scale }, this.scene);
-    head.position.y = 2.0 * scale;
-    head.parent = root; head.material = mat; meshes.push(head);
-    const arms: TransformNode[] = [];
-    for (const sx of [-1, 1]) {
-      const arm = new TransformNode(`${name}_a${sx}`, this.scene);
-      arm.position.set(sx * 0.85 * scale, 1.6 * scale, 0);
-      arm.parent = root;
-      const am = MeshBuilder.CreateBox(`${name}_am${sx}`, { width: 0.35 * scale, height: 1.0 * scale, depth: 0.35 * scale }, this.scene);
-      am.position.y = -0.5 * scale;
-      am.parent = arm; am.material = mat; meshes.push(am);
-      arms.push(arm);
-    }
-    return { root, meshes, mats, limbs: { armL: arms[0], armR: arms[1] } };
-  }
-
   private buildNpc(e: SnapshotEntity): EntityView {
     const npc = NPCS[Object.keys(NPCS).find((id) => Math.abs(NPCS[id].x - e.x) < 2 && Math.abs(NPCS[id].z - e.z) < 2) ?? ''] ;
     const color = npc?.color ?? '#ffd54f';
-    const built = this.makeHumanoid(`npc_${e.id}`, { bodyColor: color, hairColor: '#5d4037', skin: '#e0ac69', weapon: npc?.role === 'guard' ? 'sword' : 'none', scale: 1 });
-    const view = this.baseView(built.root, built.meshes, built.mats, built.limbs, 'npc', e, Color3.FromHexString(color));
+    const kit = new Kit(this.scene, this.texlib, `npc_${e.id}`);
+    makeNpc(kit, npc?.role ?? 'flavor', color);
+    const built = this.finishModel(kit, 0.9);
+    const view = this.baseView(built.root, built.meshes, built.mats, built.limbs, 'npc', e, Color3.FromHexString(color), built.primary);
     const marker = MeshBuilder.CreatePolyhedron(`npcm_${e.id}`, { type: 1, size: 0.22 }, this.scene);
     marker.position.y = 2.35;
     marker.parent = built.root;
@@ -936,109 +859,6 @@ export class GameView {
     mesh.material = mat;
     mesh.parent = root;
     return this.baseView(root, [mesh], [mat], {}, 'ground', e, gold ? new Color3(1, 0.8, 0.2) : new Color3(0.9, 0.9, 0.9));
-  }
-
-  private makeHumanoid(name: string, o: { bodyColor: string; hairColor: string; skin: string; weapon: string; scale: number }): { root: TransformNode; meshes: AbstractMesh[]; mats: StandardMaterial[]; limbs: Limbs } {
-    const s = o.scale;
-    const root = new TransformNode(name, this.scene);
-    const meshes: AbstractMesh[] = [];
-    const mats: StandardMaterial[] = [];
-    const bodyMat = this.entityMat(`${name}_body`, o.bodyColor);
-    const skinMat = this.entityMat(`${name}_skin`, o.skin);
-    const hairMat = this.entityMat(`${name}_hair`, o.hairColor);
-    const accentMat = this.entityMat(`${name}_acc`, weaponColor(o.weapon));
-    mats.push(bodyMat, skinMat, hairMat, accentMat);
-
-    const body = new TransformNode(`${name}_bodyP`, this.scene);
-    body.position.y = 0.55 * s;
-    body.parent = root;
-    const torso = MeshBuilder.CreateBox(`${name}_torso`, { width: 0.5 * s, height: 0.6 * s, depth: 0.3 * s }, this.scene);
-    torso.position.y = 0.3 * s;
-    torso.parent = body;
-    torso.material = bodyMat;
-    meshes.push(torso);
-
-    const head = MeshBuilder.CreateBox(`${name}_head`, { width: 0.36 * s, height: 0.36 * s, depth: 0.36 * s }, this.scene);
-    head.position.y = 0.78 * s;
-    head.parent = body;
-    head.material = skinMat;
-    meshes.push(head);
-    const hair = MeshBuilder.CreateBox(`${name}_hair`, { width: 0.4 * s, height: 0.14 * s, depth: 0.4 * s }, this.scene);
-    hair.position.y = 0.98 * s;
-    hair.parent = body;
-    hair.material = hairMat;
-    meshes.push(hair);
-
-    const armR = new TransformNode(`${name}_armR`, this.scene);
-    armR.position.set(0.34 * s, 0.5 * s, 0);
-    armR.parent = body;
-    const armRm = MeshBuilder.CreateBox(`${name}_armRm`, { width: 0.15 * s, height: 0.5 * s, depth: 0.15 * s }, this.scene);
-    armRm.position.y = -0.25 * s;
-    armRm.parent = armR;
-    armRm.material = skinMat;
-    meshes.push(armRm);
-
-    const armL = new TransformNode(`${name}_armL`, this.scene);
-    armL.position.set(-0.34 * s, 0.5 * s, 0);
-    armL.parent = body;
-    const armLm = MeshBuilder.CreateBox(`${name}_armLm`, { width: 0.15 * s, height: 0.5 * s, depth: 0.15 * s }, this.scene);
-    armLm.position.y = -0.25 * s;
-    armLm.parent = armL;
-    armLm.material = skinMat;
-    meshes.push(armLm);
-
-    const legR = new TransformNode(`${name}_legR`, this.scene);
-    legR.position.set(0.14 * s, 0.5 * s, 0);
-    legR.parent = body;
-    const legRm = MeshBuilder.CreateBox(`${name}_legRm`, { width: 0.17 * s, height: 0.5 * s, depth: 0.17 * s }, this.scene);
-    legRm.position.y = -0.25 * s;
-    legRm.parent = legR;
-    legRm.material = bodyMat;
-    meshes.push(legRm);
-
-    const legL = new TransformNode(`${name}_legL`, this.scene);
-    legL.position.set(-0.14 * s, 0.5 * s, 0);
-    legL.parent = body;
-    const legLm = MeshBuilder.CreateBox(`${name}_legLm`, { width: 0.17 * s, height: 0.5 * s, depth: 0.17 * s }, this.scene);
-    legLm.position.y = -0.25 * s;
-    legLm.parent = legL;
-    legLm.material = bodyMat;
-    meshes.push(legLm);
-
-    // weapon in right hand
-    const weapon = this.makeWeapon(`${name}_w`, o.weapon, s, accentMat);
-    if (weapon) { weapon.parent = armR; weapon.position.set(0, -0.5 * s, 0.2 * s); meshes.push(weapon); }
-
-    // blob shadow
-    const shadow = this.makeBlobShadow(`${name}_shadow`, 0.9 * s);
-    shadow.parent = root;
-    meshes.push(shadow);
-
-    return { root, meshes, mats, limbs: { body, armR, armL, legR, legL } };
-  }
-
-  private makeWeapon(name: string, kind: string, s: number, mat: StandardMaterial): Mesh | null {
-    if (kind === 'none') return null;
-    if (kind === 'bow') {
-      const bow = MeshBuilder.CreateTorus(`${name}_bow`, { diameter: 0.8 * s, thickness: 0.07 * s, tessellation: 12 }, this.scene);
-      bow.rotation.z = Math.PI / 2;
-      bow.material = mat;
-      return bow;
-    }
-    if (kind === 'staff') {
-      const staff = MeshBuilder.CreateCylinder(`${name}_staff`, { height: 1.4 * s, diameter: 0.09 * s, tessellation: 6 }, this.scene);
-      staff.material = mat;
-      return staff;
-    }
-    if (kind === 'claw') {
-      const claw = MeshBuilder.CreateBox(`${name}_claw`, { width: 0.1 * s, height: 0.5 * s, depth: 0.1 * s }, this.scene);
-      claw.material = mat;
-      return claw;
-    }
-    const sword = MeshBuilder.CreateBox(`${name}_sword`, { width: 0.08 * s, height: 1.0 * s, depth: 0.14 * s }, this.scene);
-    sword.position.y = 0.3 * s;
-    sword.material = mat;
-    return sword;
   }
 
   private makeBlobShadow(name: string, radius: number): Mesh {
@@ -1082,8 +902,7 @@ export class GameView {
       let color = Color3.FromHexString(def?.color ?? '#8d6e63');
       if (es.hp !== undefined && es.mhp && es.mhp > 0 && es.hp / es.mhp < 0.3) color = Color3.FromHexString('#c62828');
       const emissive = e.flash ? new Color3(0.8, 0.15, 0.15) : es.boss ? new Color3(0.2, 0.05, 0.28) : new Color3(0, 0, 0);
-      for (const m of view.mats) {
-        if (!m.emissiveColor) continue;
+      for (const m of view.primary ? [view.primary] : view.mats) {
         m.diffuseColor = color;
         m.emissiveColor = emissive;
       }
@@ -1212,7 +1031,10 @@ export class GameView {
     if (limbs.legL) limbs.legL.rotation.x = -swing;
     if (limbs.armR) limbs.armR.rotation.x = attacking ? -1.3 : -swing * 0.8;
     if (limbs.armL) limbs.armL.rotation.x = attacking ? -0.4 : swing * 0.8;
-    if (limbs.body) limbs.body.position.y = 0.55 + Math.abs(swing) * 0.03;
+    if (limbs.wingR) limbs.wingR.rotation.z = Math.sin(t * (moving ? 12 : 6)) * 0.5;
+    if (limbs.wingL) limbs.wingL.rotation.z = -Math.sin(t * (moving ? 12 : 6)) * 0.5;
+    if (limbs.tail) limbs.tail.rotation.y = Math.sin(t * 2.5) * 0.25;
+    if (limbs.body) limbs.body.position.y = (limbs.bodyBaseY ?? 0.55) + Math.abs(swing) * 0.03;
   }
 
   private sendMovement() {
@@ -1252,7 +1074,7 @@ export class GameView {
 
   applyQuality(q: Quality, rebuild = true) {
     this.quality = q;
-    const cfg = QUALITY[q];
+    const cfg = QUALITY_PRESETS[q];
     this.pixelSize = cfg.pixel;
     this.engine.setHardwareScalingLevel(this.pixelSize);
     this.camera.maxZ = cfg.maxZ;
@@ -1322,25 +1144,6 @@ export class GameView {
     this.texlib.dispose();
     this.scene.dispose();
     this.engine.dispose();
-  }
-}
-
-function weaponFor(archetype: ArchetypeId): string {
-  switch (archetype) {
-    case 'strider': return 'bow';
-    case 'arcanist': return 'staff';
-    case 'warden': return 'staff';
-    case 'reaver': return 'sword';
-    default: return 'sword';
-  }
-}
-
-function weaponColor(weapon: string): string {
-  switch (weapon) {
-    case 'bow': return '#6d4c41';
-    case 'staff': return '#8d6e63';
-    case 'claw': return '#b0bec5';
-    default: return '#cfd8dc';
   }
 }
 
