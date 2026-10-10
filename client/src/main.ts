@@ -264,7 +264,7 @@ function beginGame(player: SerializedPlayer, abilities: { id: string; name: stri
   game.setZone(player.zoneId, player.x, player.z);
   hud.setZoneName(ZONES[player.zoneId]?.name ?? player.zoneId);
   hud.setVitals(player);
-  hud.addChat('system', 'Welcome to WAYFARE.ONLINE. Talk to NPCs with E, fight with LMB or Space.', true);
+  hud.addChat('system', 'Welcome to WAYFARE.ONLINE. Move with WASD, look around with ARROW KEYS (Y to recenter), attack with LMB or Space, talk with E.', true);
   const mode = transport?.online ? 'online' : 'offline single-player';
   hud.addChat('system', `Mode: ${mode}.`, true);
 }

@@ -17,45 +17,52 @@
  * generator; this covers characters, creatures, props, FX and interface.
  */
 export const PALETTE = {
-  // natural world
-  grassLight: '#7bb661',
-  grassMid: '#5a9247',
-  grassDark: '#3c6b34',
-  foliageLight: '#86c765',
-  foliageMid: '#4f9440',
-  foliageDeep: '#2f6b2c',
-  barkLight: '#8a5a34',
-  barkDark: '#4d3120',
-  rockLight: '#9aa4b2',
-  rockMid: '#6f7a89',
-  rockDark: '#48505c',
-  sand: '#dcc38a',
-  snow: '#eef4ff',
-  ice: '#a9d4ef',
-  water: '#3f8fd0',
-  waterDeep: '#22598c',
-  waterShallow: '#6cc0e6',
+  // natural world — vivid arcade saturation, reads as flat 2D pixel art
+  grassLight: '#9ee06a',
+  grassMid: '#63c043',
+  grassDark: '#3f8f2e',
+  foliageLight: '#9fe070',
+  foliageMid: '#5cb83f',
+  foliageDeep: '#2f7d29',
+  barkLight: '#a76b3a',
+  barkDark: '#5c3a22',
+  rockLight: '#b3bdcc',
+  rockMid: '#828fa0',
+  rockDark: '#565f6d',
+  sand: '#f0d488',
+  snow: '#f4f9ff',
+  ice: '#b7e2ff',
+  water: '#3fa0e8',
+  waterDeep: '#1f66a8',
+  waterShallow: '#7fdcff',
   lava: '#ff7a2f',
   lavaBright: '#ffd24a',
 
-  // build & town
-  plaster: '#e6d3ac',
-  plasterShade: '#c9b184',
-  timber: '#6b4326',
-  timberDark: '#432a18',
-  roofRed: '#b5543f',
-  roofBlue: '#3f5a8c',
-  roofGreen: '#4a7a4f',
-  roofSlate: '#556072',
-  thatch: '#b9944f',
-  stoneWall: '#9aa1ad',
-  stoneShade: '#6d7480',
-  windowGlow: '#ffcf7a',
-  lantern: '#ffb44d',
+  // build & town — bright storybook houses
+  plaster: '#f6e4b8',
+  plasterShade: '#d8bf8c',
+  timber: '#7a4c2a',
+  timberDark: '#4a2e1a',
+  roofRed: '#e85c43',
+  roofBlue: '#4f7fd6',
+  roofGreen: '#5fae54',
+  roofSlate: '#68788f',
+  thatch: '#e0b45a',
+  stoneWall: '#adb5c2',
+  stoneShade: '#7b838f',
+  windowGlow: '#ffd27a',
+  lantern: '#ffc04d',
   iron: '#5b6472',
-  ironLight: '#8b95a6',
-  gold: '#ffcc55',
-  goldDeep: '#c9932e',
+  ironLight: '#a4aec0',
+  gold: '#ffd25e',
+  goldDeep: '#d09a2e',
+  // extra house accents
+  wallCream: '#f7e6bd',
+  wallPeach: '#f3c79a',
+  wallBlue: '#bcd8f2',
+  wallMint: '#c4e8b8',
+  roofGold: '#ffc95e',
+  roofPlum: '#b05fb0',
 
   // magic & rarity accents
   arcane: '#9b6bff',
@@ -107,21 +114,54 @@ export const PIXEL = {
 
 /* ------------------------------------------------------------------ camera */
 
+/**
+ * MOBA / isometric camera. The world is viewed through a fixed-angle
+ * orthographic projection (League-of-Legends style) so it reads as flat 2D
+ * pixel art rather than a perspective 3D scene. Arrow keys pan the view away
+ * from the hero; Y/Home snap it back.
+ */
 export const CAMERA = {
-  alpha: -Math.PI / 2.15,
-  beta: 1.0,
-  radius: 17,
-  fov: 0.86,
-  minZ: 0.12,
-  lowerRadius: 6,
-  upperRadius: 40,
-  lowerBeta: 0.32,
-  upperBeta: 1.32,
-  wheelPrecision: 12,
-  inertia: 0.55,
-  followHeight: 1.25,
+  /** Fixed yaw: looking down the -Z axis with no rotation drift. */
+  yaw: -Math.PI / 2,
+  /** Fixed pitch angle in radians (~56°, the classic MOBA tilt). */
+  pitch: 0.98,
+  lowerPitch: 0.42,
+  upperPitch: 1.28,
+  /** Orthographic half-height; bigger = further out. */
+  zoom: 15,
+  zoomMin: 9,
+  zoomMax: 30,
+  zoomStep: 1.6,
+  /** Distance of the (orthographic) eye — only affects clipping. */
+  distance: 140,
+  minZ: 1,
+  maxZ: 620,
+  /** How far (world units) the arrow keys may drag the view off the hero. */
+  panLimit: 15,
+  panSpeed: 20,
+  panLerp: 9,
+  followHeight: 1.2,
   followLerp: 8,
   shakeDecay: 3,
+} as const;
+
+/* ------------------------------------------------------------------ render */
+
+/**
+ * Flat-2D rendering flags. When `cartoonOutlines` is on, characters, creatures,
+ * houses and props get a dark ink outline (the classic sprite look). `flatLight`
+ * keeps lighting soft and bright so surfaces read as solid colour instead of
+ * shaded 3D volumes.
+ */
+export const RENDER = {
+  cartoonOutlines: true,
+  outlineColor: '#101625',
+  outlineWidth: 0.035,
+  flatLight: true,
+  /** Multiplier applied to the directional sun when flatLight is on. */
+  sunFlat: 0.45,
+  /** Multiplier applied to ambient/hemispheric light when flatLight is on. */
+  ambientFlat: 1.25,
 } as const;
 
 /* ------------------------------------------------------------------ lighting */
@@ -175,12 +215,13 @@ export const SKY = {
  * DOM HUD and any canvas UI share one style language.
  */
 export const UI = {
-  fontBody: "'Segoe UI', system-ui, sans-serif",
+  fontBody: "'Trebuchet MS', 'Segoe UI', system-ui, sans-serif",
   fontDisplay: "'Trebuchet MS', 'Segoe UI', system-ui, sans-serif",
-  panelRadius: 6,
-  slotRadius: 5,
-  border: 2,
-  panelOpacity: 0.94,
+  /** Sharp corners + heavy ink borders give the chunky 2D-arcade HUD look. */
+  panelRadius: 3,
+  slotRadius: 2,
+  border: 3,
+  panelOpacity: 0.96,
   icon: 44,
   gap: 8,
 } as const;

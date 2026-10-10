@@ -145,10 +145,10 @@ const ROCK_DARK = hex('#4f5865');
 
 const TILES: Record<string, Tile> = {
   /* ------------------------------------------------- terrain */
-  grass: { size: 32, fn: grass('#86c96a', '#5fa64a', '#3f7d38', '#a6dd7f') },
-  grass_dark: { size: 32, fn: grass('#5a9648', '#3f7336', '#2b5427', '#74b85a') },
-  grass_light: { size: 32, fn: grass('#a4dc7c', '#7cc25c', '#579f45', '#c6ec9c') },
-  moss: { size: 32, fn: mottle([hex('#587a3a'), hex('#4a6a30'), hex('#3a5527'), hex('#668a44')], { seed: 7 }) },
+  grass: { size: 32, fn: grass('#9ee06a', '#63c043', '#3f8f2e', '#c8f28e') },
+  grass_dark: { size: 32, fn: grass('#74c24f', '#4f9e39', '#377f2a', '#9adf6a') },
+  grass_light: { size: 32, fn: grass('#b6ee86', '#8ad65e', '#66bf45', '#e0ffb0') },
+  moss: { size: 32, fn: mottle([hex('#6ba043'), hex('#5a8c38'), hex('#48722c'), hex('#7fb852')], { seed: 7 }) },
   dirt: {
     size: 32,
     fn: (x, y, size) => {
@@ -287,17 +287,19 @@ const TILES: Record<string, Tile> = {
   },
 
   /* ------------------------------------------------- roofing & builders */
-  roof_red: { size: 32, fn: roofTiles(hex('#b5543f'), hex('#8f3a2b')) },
-  roof_blue: { size: 32, fn: roofTiles(hex('#4a6aa6'), hex('#34507e')) },
-  roof_green: { size: 32, fn: roofTiles(hex('#5a8a56'), hex('#3f6a3f')) },
-  roof_slate: { size: 32, fn: roofTiles(hex('#66707f'), hex('#454d5a')) },
+  roof_red: { size: 32, fn: roofTiles(hex('#e85c43'), hex('#b83a2b')) },
+  roof_blue: { size: 32, fn: roofTiles(hex('#4f7fd6'), hex('#2f52a0')) },
+  roof_green: { size: 32, fn: roofTiles(hex('#5fae54'), hex('#3d823c')) },
+  roof_slate: { size: 32, fn: roofTiles(hex('#68788f'), hex('#46505e')) },
+  roof_gold: { size: 32, fn: roofTiles(hex('#ffc95e'), hex('#d0892e')) },
+  roof_plum: { size: 32, fn: roofTiles(hex('#b05fb0'), hex('#7f3a7f')) },
   thatch: {
     size: 32,
     fn: (x, y) => {
       const strand = Math.floor(x / 3);
       const wob = Math.sin(y * 0.3 + hash(strand, 0, 3) * 5) * 1.5;
       const n = hash(strand, Math.floor((y + wob) / 4), 8);
-      const c = mix(hex('#9c7a3c'), hex('#c9a75c'), n);
+      const c = mix(hex('#c9963c'), hex('#ecc25c'), n);
       return [c[0], c[1], c[2], 255];
     },
   },

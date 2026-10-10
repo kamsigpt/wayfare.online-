@@ -400,42 +400,67 @@ export class Hud {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
     const zone = ZONES[zoneId] ?? ZONES.elaris;
     const range = 70;
     const scale = canvas.width / (range * 2);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(8,12,18,0.85)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Bright 2D "world map": lush ground, drawn like a sticker map.
+    ctx.fillStyle = '#4f9a3c';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    for (let gy = 0; gy < H; gy += 16) ctx.fillRect(0, gy, W, 1);
+    for (let gx = 0; gx < W; gx += 16) ctx.fillRect(gx, 0, 1, H);
 
     const toMap = (x: number, z: number) => ({
-      mx: canvas.width / 2 + (x - you.x) * scale,
-      my: canvas.height / 2 + (z - you.z) * scale,
+      mx: W / 2 + (x - you.x) * scale,
+      my: H / 2 + (z - you.z) * scale,
     });
+    const dot = (mx: number, my: number, r: number, fill: string, ink = '#12203a') => {
+      ctx.beginPath(); ctx.arc(mx, my, r + 1, 0, Math.PI * 2); ctx.fillStyle = ink; ctx.fill();
+      ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill();
+    };
 
-    // obstacles faint
-    ctx.fillStyle = 'rgba(90,105,125,0.35)';
-    for (const o of zone.obstacles) {
-      const p = toMap(o.x, o.z);
-      ctx.fillRect(p.mx - 1, p.my - 1, 2.5, 2.5);
+    // paths & land patches first
+    for (const p of zone.props) {
+      const m = toMap(p.x, p.z);
+      const w = Math.max(2, p.w * scale);
+      const d = Math.max(2, p.d * scale);
+      ctx.fillStyle = p.kind === 'road' ? '#c8a86a' : p.kind === 'stone' ? '#9aa1ad' : p.kind === 'lava' ? '#e8642a' : '#5aa848';
+      ctx.fillRect(m.mx - w / 2, m.my - d / 2, w, d);
     }
+
+    for (const o of zone.obstacles) {
+      const m = toMap(o.x, o.z);
+      if (o.kind === 'water') ctx.fillStyle = '#3fa0e8';
+      else if (o.kind === 'building') ctx.fillStyle = '#e0b45a';
+      else if (o.kind === 'wall' || o.kind === 'ruin' || o.kind === 'pillar') ctx.fillStyle = '#b0b7c4';
+      else if (o.kind === 'fence') ctx.fillStyle = '#8a5c34';
+      else ctx.fillStyle = '#357a2a';
+      const s = o.kind === 'building' ? Math.max(4, o.w * scale) : Math.max(2, o.w * scale);
+      ctx.fillRect(m.mx - s / 2, m.my - s / 2, s, s);
+    }
+
     for (const e of entities) {
       const p = toMap(e.x, e.z);
-      if (p.mx < 0 || p.my < 0 || p.mx > canvas.width || p.my > canvas.height) continue;
-      if (e.kind === 'enemy') ctx.fillStyle = '#e05b5b';
-      else if (e.kind === 'npc') ctx.fillStyle = '#ffd54f';
-      else if (e.kind === 'player') ctx.fillStyle = '#4ea1ff';
-      else if (e.kind === 'node') ctx.fillStyle = '#7bea90';
-      else if (e.kind === 'ground') ctx.fillStyle = '#ffcc66';
-      else continue;
-      ctx.beginPath();
-      ctx.arc(p.mx, p.my, e.kind === 'player' ? 3 : 2, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.mx < -6 || p.my < -6 || p.mx > W + 6 || p.my > H + 6) continue;
+      if (e.kind === 'enemy') dot(p.mx, p.my, 2.4, '#ff5b5b');
+      else if (e.kind === 'npc') dot(p.mx, p.my, 2.6, '#ffd54f');
+      else if (e.kind === 'player') dot(p.mx, p.my, 2.8, '#4ea1ff');
+      else if (e.kind === 'node') dot(p.mx, p.my, 2.2, '#7bea90');
+      else if (e.kind === 'ground') dot(p.mx, p.my, 2, '#ffcc66');
     }
-    // self
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 3.5, 0, Math.PI * 2);
-    ctx.fill();
+
+    // self marker — white star with ink ring
+    dot(W / 2, H / 2, 3.4, '#ffffff', '#0a1220');
+    dot(W / 2, H / 2, 1.6, '#ffd54f', '#0a1220');
+
+    // ink frame
+    ctx.strokeStyle = '#0a1220';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, W - 3, H - 3);
   }
 
   setLoading(visible: boolean, text?: string) {

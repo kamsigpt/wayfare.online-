@@ -1,6 +1,7 @@
 import {
   AbstractMesh,
   ArcRotateCamera,
+  Camera,
   Color3,
   Color4,
   DirectionalLight,
@@ -27,7 +28,7 @@ import type { ClientMessage, EnemySnapshot, PlayerSnapshot, ServerMessage, Snaps
 import type { ArchetypeId, EnemyDef } from '@shared/types.js';
 import { TextureLibrary } from './textures.js';
 import { terrainHeight, terrainSlope } from './terrain.js';
-import { QUALITY_PRESETS, SKY, type Quality } from './visual.js';
+import { CAMERA, PALETTE, QUALITY_PRESETS, RENDER, SKY, type Quality } from './visual.js';
 import { Kit, makeEnemy, makeNpc, makePlayer, type BuiltModel } from './models.js';
 
 type EnemyArchetype = EnemyDef['archetype'];
@@ -85,6 +86,14 @@ export class GameView {
   private canvas: HTMLCanvasElement;
   private texlib: TextureLibrary;
 
+  // MOBA-style fixed-angle orthographic camera (flat 2D / isometric feel).
+  private camYaw = CAMERA.yaw;
+  private camPitch = CAMERA.pitch;
+  private camZoom: number = CAMERA.zoom;
+  /** View offset dragged by the arrow keys, expressed in world XZ. */
+  private camPan = { x: 0, z: 0 };
+
+
   private entities = new Map<number, EntityView>();
   private staticMeshes: AbstractMesh[] = [];
   private staticMaterials: Material[] = [];
@@ -130,18 +139,15 @@ export class GameView {
     this.hemi = new HemisphericLight('hemi', new Vector3(0.2, 1, 0.1), this.scene);
     this.sun = new DirectionalLight('sun', new Vector3(-0.5, -1, -0.3), this.scene);
 
-    this.camera = new ArcRotateCamera('cam', -Math.PI / 2, 1.02, 16, new Vector3(0, 1, 0), this.scene);
-    this.camera.attachControl(canvas, true);
-    this.camera.lowerRadiusLimit = 6;
-    this.camera.upperRadiusLimit = 34;
-    this.camera.lowerBetaLimit = 0.35;
-    this.camera.upperBetaLimit = 1.34;
-    this.camera.wheelPrecision = 14;
+    this.camera = new ArcRotateCamera('cam', this.camYaw, this.camPitch, CAMERA.distance, new Vector3(0, 1, 0), this.scene);
+    this.camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+    this.camera.lowerBetaLimit = CAMERA.lowerPitch;
+    this.camera.upperBetaLimit = CAMERA.upperPitch;
+    this.camera.inertia = 0.6;
+    this.camera.minZ = CAMERA.minZ;
+    this.camera.maxZ = CAMERA.maxZ;
     this.camera.panningSensibility = 0;
-    this.camera.inertia = 0.55;
-    this.camera.minZ = 0.15;
-    this.camera.maxZ = QUALITY_PRESETS.medium.maxZ;
-    this.camera.fov = 0.9;
+    this.updateOrtho();
 
     this.zone = ZONES.elaris;
     this.applyQuality('medium', false);
@@ -150,6 +156,7 @@ export class GameView {
     window.addEventListener('keyup', this.onKeyUp);
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
+    canvas.addEventListener('wheel', this.onWheel, { passive: false });
     window.addEventListener('blur', this.onBlur);
     window.addEventListener('resize', this.onResize);
 
@@ -190,10 +197,11 @@ export class GameView {
     this.scene.fogColor = Color3.FromHexString(zone.fogColor);
     this.scene.fogDensity = zone.fogDensity * cfg.fogMul;
     this.scene.clearColor = Color4.FromHexString(`${zone.fogColor}ff`);
-    this.hemi.intensity = zone.ambient + 0.15;
+    const flat = RENDER.flatLight ? RENDER.ambientFlat : 1;
+    this.hemi.intensity = (zone.ambient + 0.15) * flat;
     this.hemi.diffuse = Color3.FromHexString(zone.ambientColor);
-    this.hemi.groundColor = Color3.FromHexString(zone.groundColor).scale(0.6);
-    this.sun.intensity = zone.sunIntensity;
+    this.hemi.groundColor = Color3.FromHexString(zone.groundColor).scale(0.8);
+    this.sun.intensity = zone.sunIntensity * (RENDER.flatLight ? RENDER.sunFlat : 1);
     this.sun.diffuse = Color3.FromHexString(zone.sunColor);
     this.sun.direction = new Vector3(zone.sunDir.x, zone.sunDir.y, zone.sunDir.z);
 
@@ -423,6 +431,7 @@ export class GameView {
           trunk.position.set(o.x, y + o.h * 0.27, o.z);
           trunk.material = trunkMat;
           trunk.isPickable = false;
+          this.inkOutline(trunk, 0.03);
           this.staticMeshes.push(trunk);
           const canopy = this.makeCanopy(`leaf_${o.x}_${o.z}`, o.x, y + o.h * 0.6, o.z, 2.4 + (o.h % 2) * 0.4);
           if (leafIdx === 1) leafB.push(canopy); else leafA.push(canopy);
@@ -435,6 +444,7 @@ export class GameView {
           mesh.rotation.set(this.rng() * 0.6, this.rng() * Math.PI, this.rng() * 0.6);
           mesh.material = o.color === '#5c6bc0' ? rockMatB : rockMat;
           mesh.isPickable = false;
+          this.inkOutline(mesh, 0.04);
           this.staticMeshes.push(mesh);
           break;
         }
@@ -447,6 +457,7 @@ export class GameView {
           wall.position.set(o.x, y + o.h / 2, o.z);
           wall.material = this.pixelMat('ruin', { uv: Math.max(2, Math.round(o.w / 5)) });
           wall.isPickable = false;
+          this.inkOutline(wall, 0.04);
           this.staticMeshes.push(wall);
           break;
         }
@@ -458,6 +469,7 @@ export class GameView {
           if (broken) pillar.rotation.z = (this.rng() - 0.5) * 0.25;
           pillar.material = this.pixelMat('ruin', { uv: 2 });
           pillar.isPickable = false;
+          this.inkOutline(pillar, 0.03);
           this.staticMeshes.push(pillar);
           break;
         }
@@ -470,6 +482,7 @@ export class GameView {
           fence.position.set(o.x, y + o.h / 2, o.z);
           fence.material = this.pixelMat('wood', { uv: 2 });
           fence.isPickable = false;
+          this.inkOutline(fence, 0.025);
           this.staticMeshes.push(fence);
           break;
         }
@@ -526,25 +539,62 @@ export class GameView {
   }
 
   private buildBuilding(o: Obstacle, y: number) {
-    const wallMat = this.pixelMat('wood', { uv: Math.max(2, Math.round(o.w / 4)) });
+    // Deterministic "house style" so villages look hand-picked, not random.
+    const seed = Math.abs(Math.imul(Math.round(o.x * 7 + o.z * 13), 2654435761)) >>> 0;
+    const wallTints = [PALETTE.wallCream, PALETTE.wallPeach, PALETTE.wallBlue, PALETTE.wallMint, '#f7f0d8'];
+    const roofTex = ['roof_red', 'roof_blue', 'roof_green', 'roof_gold', 'roof_plum', 'thatch'];
+    const wallColor = wallTints[seed % wallTints.length];
+    const roofName = roofTex[(seed >> 3) % roofTex.length];
+    const uv = Math.max(1, Math.round(o.w / 3));
+
+    const wallMat = this.pixelMat('plaster', { tint: wallColor, uv });
     const body = MeshBuilder.CreateBox(`bldg_${o.x}_${o.z}`, { width: o.w, height: o.h, depth: o.d }, this.scene);
     body.position.set(o.x, y + o.h / 2, o.z);
     body.material = wallMat;
     body.isPickable = false;
+    this.inkOutline(body, 0.045);
     this.staticMeshes.push(body);
 
-    const roofMat = this.registerMat((() => {
-      const m = new StandardMaterial('roofmat', this.scene);
-      m.diffuseColor = Color3.FromHexString('#8d4b3a');
-      m.specularColor = new Color3(0, 0, 0);
-      return m;
-    })());
-    const roof = MeshBuilder.CreateCylinder(`roof_${o.x}_${o.z}`, { height: Math.max(o.w, o.d) * 0.55, diameterTop: 0, diameterBottom: Math.max(o.w, o.d) * 1.35, tessellation: 4 }, this.scene);
-    roof.position.set(o.x, y + o.h + Math.max(o.w, o.d) * 0.27, o.z);
+    // Timber corner posts for a cosy storybook silhouette.
+    const postMat = this.pixelMat('timber', { uv: 2 });
+    for (const sx of [-1, 1]) {
+      const post = MeshBuilder.CreateBox(`bpost_${o.x}_${o.z}_${sx}`, { width: 0.42, height: o.h, depth: 0.42 }, this.scene);
+      post.position.set(o.x + sx * (o.w / 2 - 0.12), y + o.h / 2, o.z - o.d / 2 + 0.12);
+      post.material = postMat;
+      post.isPickable = false;
+      this.inkOutline(post, 0.025);
+      this.staticMeshes.push(post);
+    }
+
+    const roofMat = this.pixelMat(roofName, { uv: Math.max(2, Math.round(Math.max(o.w, o.d) / 3)) });
+    const roof = MeshBuilder.CreateCylinder(`roof_${o.x}_${o.z}`, { height: Math.max(o.w, o.d) * 0.62, diameterTop: 0, diameterBottom: Math.max(o.w, o.d) * 1.42, tessellation: 4 }, this.scene);
+    roof.position.set(o.x, y + o.h + Math.max(o.w, o.d) * 0.3, o.z);
     roof.rotation.y = Math.PI / 4;
     roof.material = roofMat;
     roof.isPickable = false;
+    this.inkOutline(roof, 0.05);
     this.staticMeshes.push(roof);
+
+    // Front door + glowing windows on the face toward the camera (-Z).
+    const front = o.z - o.d / 2 - 0.06;
+    const doorMat = this.pixelMat('door', { uv: 1 });
+    const door = MeshBuilder.CreatePlane(`door_${o.x}_${o.z}`, { width: Math.min(1.4, o.w * 0.5), height: Math.min(2.1, o.h * 0.72) }, this.scene);
+    door.position.set(o.x, y + Math.min(2.1, o.h * 0.72) / 2, front);
+    door.rotation.y = Math.PI;
+    door.material = doorMat;
+    door.isPickable = false;
+    this.staticMeshes.push(door);
+
+    const winMat = this.pixelMat('window', { uv: 1, emissive: 0.35 });
+    for (const sx of [-1, 1]) {
+      if (o.w < 3) break;
+      const win = MeshBuilder.CreatePlane(`win_${o.x}_${o.z}_${sx}`, { width: 1, height: 1 }, this.scene);
+      win.position.set(o.x + sx * (o.w / 2 - 1.15), y + o.h * 0.6, front);
+      win.rotation.y = Math.PI;
+      win.material = winMat;
+      win.isPickable = false;
+      this.staticMeshes.push(win);
+    }
   }
 
   private buildRuinArea(o: Obstacle, y: number) {
@@ -782,10 +832,19 @@ export class GameView {
 
   private finishModel(kit: Kit, shadowRadius = 0.9): BuiltModel {
     const built = kit.result();
+    for (const m of built.meshes) this.inkOutline(m);
     const shadow = this.makeBlobShadow(`${built.root.name}_shadow`, shadowRadius);
     shadow.parent = built.root;
     built.meshes.push(shadow);
     return built;
+  }
+
+  /** Sprite-style dark ink outline (the classic 2D cartoon look). */
+  private inkOutline(mesh: AbstractMesh, width: number = RENDER.outlineWidth): void {
+    if (!RENDER.cartoonOutlines) return;
+    mesh.renderOutline = true;
+    mesh.outlineColor = Color3.FromHexString(RENDER.outlineColor);
+    mesh.outlineWidth = width;
   }
 
   private buildPlayer(e: PlayerSnapshot): EntityView {
@@ -918,7 +977,9 @@ export class GameView {
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     this.keys.add(e.code);
+    if (e.code.startsWith('Arrow')) e.preventDefault();
     if (e.code === 'Space') { e.preventDefault(); this.doAttack(); }
+    if (e.code === 'KeyY' || e.code === 'Home') { this.centerCamera(); e.preventDefault(); }
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.cb.send({ t: 'dodge', seq: this.inputSeq++ });
     if (e.code === 'KeyE') this.doInteract();
     if (e.code.startsWith('Digit')) {
@@ -927,9 +988,39 @@ export class GameView {
     }
   };
 
+  /** Snap the MOBA view back onto the hero. */
+  centerCamera() {
+    this.camPan.x = 0;
+    this.camPan.z = 0;
+  }
+
   private onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.code);
   private onBlur = () => this.keys.clear();
-  private onResize = () => this.engine.resize();
+  private onResize = () => {
+    this.engine.resize();
+    this.updateOrtho();
+  };
+
+  private onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    this.setZoom(this.camZoom + Math.sign(e.deltaY) * CAMERA.zoomStep);
+  };
+
+  setZoom(zoom: number) {
+    this.camZoom = Math.max(CAMERA.zoomMin, Math.min(CAMERA.zoomMax, zoom));
+    this.updateOrtho();
+  }
+
+  private updateOrtho() {
+    const w = this.engine.getRenderWidth();
+    const h = this.engine.getRenderHeight();
+    const aspect = h > 0 ? w / h : 1;
+    const half = this.camZoom;
+    this.camera.orthoTop = half;
+    this.camera.orthoBottom = -half;
+    this.camera.orthoLeft = -half * aspect;
+    this.camera.orthoRight = half * aspect;
+  }
 
   private onPointerDown = (e: PointerEvent) => {
     this.lastPointerDown = { x: e.clientX, y: e.clientY, t: performance.now(), button: e.button };
@@ -971,12 +1062,34 @@ export class GameView {
 
   // ================================================================== per-frame
 
+  /** Arrow-key edge pan: drag the view off the hero within `CAMERA.panLimit`. */
+  private updateCameraPan(dt: number) {
+    const up = (this.keys.has('ArrowUp') ? 1 : 0) - (this.keys.has('ArrowDown') ? 1 : 0);
+    const rt = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0);
+    if (up === 0 && rt === 0) return;
+    const yaw = this.camera.alpha + Math.PI;
+    const sin = Math.sin(yaw);
+    const cos = Math.cos(yaw);
+    const len = Math.hypot(up, rt) || 1;
+    this.camPan.x += ((-sin * up + cos * rt) / len) * CAMERA.panSpeed * dt;
+    this.camPan.z += ((-cos * up - sin * rt) / len) * CAMERA.panSpeed * dt;
+    const mag = Math.hypot(this.camPan.x, this.camPan.z);
+    if (mag > CAMERA.panLimit) {
+      const k = CAMERA.panLimit / mag;
+      this.camPan.x *= k;
+      this.camPan.z *= k;
+    }
+  }
+
   private update(dt: number) {
     this.elapsed += dt;
     const t = this.elapsed;
-    const ty = terrainHeight(this.zone.id, this.localPos.x, this.localPos.z) + 1.2;
-    const target = new Vector3(this.localPos.x, ty, this.localPos.z);
-    this.camera.target = Vector3.Lerp(this.camera.target, target, Math.min(1, dt * 8));
+    this.updateCameraPan(dt);
+    const px = this.localPos.x + this.camPan.x;
+    const pz = this.localPos.z + this.camPan.z;
+    const ty = terrainHeight(this.zone.id, px, pz) + CAMERA.followHeight;
+    const target = new Vector3(px, ty, pz);
+    this.camera.target = Vector3.Lerp(this.camera.target, target, Math.min(1, dt * CAMERA.followLerp));
     if (this.cameraShake > 0) {
       this.cameraShake = Math.max(0, this.cameraShake - dt * 3);
       const s = this.shakeEnabled ? this.cameraShake : 0;
